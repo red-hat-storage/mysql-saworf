@@ -1,0 +1,65 @@
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mysql-ocs
+  namespace: sagy
+spec:
+  selector:
+    matchLabels:
+      app: mysql-ocs
+  serviceName: "mysql-ocs"
+  podManagementPolicy: Parallel
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: mysql-ocs
+    spec:
+      terminationGracePeriodSeconds: 10
+      containers:
+      - name: mysql-ocs
+        image: mysql:5.7
+        env:
+        - name: MYSQL_USER
+          value: ocs
+        - name: MYSQL_PASSWORD
+          value: password
+        - name: MYSQL_DATABASE
+          value: test-db
+        - name: MYSQL_ROOT_PASSWORD
+          value: password
+        ports:
+        - containerPort: 3306
+          name: mysql
+        volumeMounts:
+        - name: mysql-ocs-data
+          mountPath: /var/lib/mysql
+        lifecycle:
+          postStart:
+            exec:
+              command:
+              - "bash"
+              - "-c"
+              - >
+                /bin/date >> /tmp/1;
+                while ! /usr/bin/mysql -sN --user=ocs --password=password test-db -e "select 3" >/dev/null 2>&1 ;
+                do
+                 echo waiting for test-db to come up $(date) >> /tmp/1
+                 /bin/sleep 1
+                done;
+                /usr/bin/mysql -sN --user=ocs --password=password test-db -e "create table people(id int,name varchar(30))";
+                for x in {1..100};
+                do
+                 some_random_stuff=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 20 | head -n 1)
+                 /usr/bin/mysql -sN --user=ocs --password=password test-db -e "insert into people values ($x,'$some_random_stuff');"
+                done;
+  volumeClaimTemplates:
+  - metadata:
+      name: mysql-ocs-data
+    spec:
+      storageClassName: glusterfs-storage
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 8Gi
