@@ -10,7 +10,7 @@ spec:
       app: mysql-ocs
   serviceName: "mysql-ocs"
   podManagementPolicy: Parallel
-  replicas: 1
+  replicas: 6
   template:
     metadata:
       labels:
@@ -29,6 +29,18 @@ spec:
           value: test-db
         - name: MYSQL_ROOT_PASSWORD
           value: password
+        - name: MY_NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: MY_POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: MY_POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
         ports:
         - containerPort: 3306
           name: mysql
@@ -42,18 +54,23 @@ spec:
               - "bash"
               - "-c"
               - >
-                /bin/date >> /tmp/1;
+                log=/tmp/storage.log;
+                echo post start for $MY_POD_NAME in $MY_NODE_NAME with IP $MY_POD_IP - $(date +%Y%m%d:%H:%M:%S) >> $log;
                 while ! /usr/bin/mysql -sN --user=ocs --password=password test-db -e "select 3" >/dev/null 2>&1 ;
                 do
-                 echo waiting for test-db to come up $(date) >> /tmp/1
-                 /bin/sleep 1
+                 echo waiting for test-db to come up $(date +%Y%m%d:%H:%M:%S) >> $log;
+                 /bin/sleep 0.5;
                 done;
-                /usr/bin/mysql -sN --user=ocs --password=password test-db -e "create table people(id int,name varchar(30))";
-                for x in {1..100};
-                do
-                 some_random_stuff=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 20 | head -n 1)
-                 /usr/bin/mysql -sN --user=ocs --password=password test-db -e "insert into people values ($x,'$some_random_stuff');"
-                done;
+                row_count=$(/usr/bin/mysql -sN --user=ocs --password=password test-db -e "select count(1) from people" 2>/dev/null);
+                if [[ $row_count != 100 ]]; then
+                 echo either table is not created or not populated, doing it now $(date +%Y%m%d:%H:%M:%S) >> $log;
+                 /usr/bin/mysql -sN --user=ocs --password=password test-db -e "create table people(id int,name varchar(30))";
+                 for x in {1..100};
+                 do
+                  some_random_stuff=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 20 | head -n 1)
+                  /usr/bin/mysql -sN --user=ocs --password=password test-db -e "insert into people values ($x,'$some_random_stuff');"
+                 done;
+                fi
   volumeClaimTemplates:
   - metadata:
       name: mysql-ocs-data
