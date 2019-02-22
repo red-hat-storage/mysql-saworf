@@ -1,0 +1,70 @@
+#!/bin/bash
+
+function create_namespace()
+{
+ oc create namespace $1
+}
+
+function use_namespace()
+{
+ oc project $1
+}
+
+function create_service()
+{
+ cat <<EOF | oc create -f -
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql-ocs
+  namespace: $1
+  labels:
+    app: mysql-ocs
+spec:
+  ports:
+  - port: 3306
+    name: mysql-ocs
+  clusterIP: None
+  selector:
+    app: mysql-ocs
+EOF
+}
+
+function create_mysql_pod()
+{
+ echo do something
+}
+
+function get_node_data()
+{
+ x=1
+ worker_list=()
+ client_list=()
+ for nodename in $(oc get nodes --sort-by=metadata.name --no-headers=true -l node-role.kubernetes.io/compute=true|awk '{print $1}')
+ do
+  echo $nodename
+  if [ $x -le $number_of_workers ]; then
+   worker_list+=("$nodename")
+  else
+   client_list+=("$nodename")
+  fi
+  let x++
+ done
+}
+
+# globals
+number_of_workers=5
+number_of_clients=1
+mysql_pods_multiplier=10
+
+get_node_data
+
+for ((loop=$(($number_of_workers*$mysql_pods_multiplier)); loop>=0; loop--))
+do 
+ x=$number_of_workers
+ namespace=io-$loop-pause
+ echo create_namespace $namespace
+ echo use_namespace $namespace
+ echo create_service $namespace
+ echo create_mysql_pod on node ${worker_list[$(($loop % $number_of_workers))]}
+done
