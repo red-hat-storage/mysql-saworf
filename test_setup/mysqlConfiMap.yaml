@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mysql-custom-config
+  labels:
+    app: mysql-ocs
+data:
+  mysql.ocs.cnf: |
+    [mysqld]
+    skip-host-cache
+    skip-name-resolve
+    innodb_buffer_pool_size = 268435456
+    [mysqldump]
+    quick
+    quote-names
+    max_allowed_packet  = 16M

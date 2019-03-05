@@ -1,0 +1,10 @@
+# prep
+sysbench --db-driver=mysql --mysql-user=root --mysql-password=password \
+  --mysql-host=$(hostname) --mysql-db=sysbench --range_size=100 \
+  --table_size=10000 --tables=2 --threads=1 --events=0 --time=60 \
+  --rand-type=uniform --test=./sysbench/tests/db/oltp.lua prepare > /dev/null 2>&1
+# run
+sysbench --db-driver=mysql --mysql-user=root --mysql-password=password \
+  --mysql-host=$(hostname) --mysql-db=sysbench --range_size=100 \
+  --table_size=10000 --tables=2 --threads=1 --events=0 --time=20 \
+  --rand-type=uniform --test=./sysbench/tests/db/oltp.lua run 
