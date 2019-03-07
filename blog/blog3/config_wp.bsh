@@ -1,0 +1,37 @@
+#!/bin/bash
+
+START=41
+END=60 # number of projects to spawn
+
+function configure {
+ echo Configuring host: $HOST
+ curl -c /tmp/cookie $1/wp-admin/setup-config.php?step=1 2>&1 > /dev/null
+ curl -b /tmp/cookie --data "dbname=wordpress&uname=admin&pwd=secret&dbhost=mysql-ocs&prefix=wp_&submit=Submit" $1/wp-admin/setup-config.php?step=2 2>&1 > /dev/null
+ curl -b /tmp/cookie --data "weblog_title=Title&user_name=admin&admin_password=secret&pass1-text=secret&admin_password2=secret&pw_weak=on&admin_email=admin%40somewhere.com&Submit=Install+WordPress&language=en_US" $1/wp-admin/install.php?step=2 2>&1 > /dev/null
+}
+
+function create_project {
+ echo Creating new project wp-$1
+ oc new-project wp-$1
+ oc create -f headless-service-mysql.yaml -f mysql-sts-gluster-no-liveness.yaml
+ oc new-app php~https://github.com/wordpress/wordpress
+ oc expose svc/wordpress
+}
+
+
+### MAIN
+
+for (( i=$START; i<=$END; i++ ))
+do
+ create_project $i
+done
+
+echo Sleeping for 2 minutes to allow pods to come up...
+sleep 120
+for (( i=$START; i<=$END; i++ ))
+do
+ HOST=$(oc get route wordpress -n wp-$i | grep -v NAME | cut -d " " -f 4)
+ configure $HOST
+done
+
+

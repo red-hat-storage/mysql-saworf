@@ -1,0 +1,14 @@
+FROM centos:latest
+MAINTAINER dotNetDR dotnetdr1987@gmail.com
+
+RUN yum -y install https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm && \
+yum install -y http://repo.mysql.com/mysql-community-release-el7-5.noarch.rpm && \
+yum install -y mysql-community-libs && \
+yum install -y mysql-community-devel && \
+yum install -y libtool && \
+yum install -y make && \
+yum install -y which && \
+yum install -y sysbench
+
+CMD ["sysbench"]
+

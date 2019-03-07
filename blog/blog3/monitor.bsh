@@ -1,0 +1,30 @@
+#!/bin/bash
+
+COMPUTENODE=$1
+EC=false
+
+function check_host {
+ RC=$(curl -o /dev/null --silent --head --write-out "%{http_code}" $1)
+ if [ $RC -ne 200 ] && [ $EC = false ]; then
+  echo Error on $HOST at: $(date)
+  EC=true
+ elif [ $RC -eq 200 ] && [ $EC = true ]; then
+  echo No more errors at: $(date)
+  EC=false
+ fi
+}
+
+NAMESPACES=$(oc adm manage-node $COMPUTENODE --list-pods 2>&1 | grep -i mysql | awk '{print $1}')
+HOSTS=$(for i in $NAMESPACES; do oc get route wordpress -n $i | grep -v NAME| awk '{print $2}'; done)
+
+while true 
+do
+ for HOST in $HOSTS
+ do
+  #curl -I http://$HOST/ 2>&1 | grep HTTP
+  check_host $HOST &
+  sleep 0.5
+ done
+done
+
+

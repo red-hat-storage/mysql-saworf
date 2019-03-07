@@ -1,0 +1,10 @@
+#!/bin/bash
+
+NODES=$(oc get nodes |grep -v NAME | awk '{print $1}')
+for NODE in $NODES
+do
+ MPODS=$(oc adm manage-node $NODE --list-pods 2>&1 | grep -i mysql | wc -l)
+ echo $MPODS mysql pods on $NODE
+ echo
+done
+~      

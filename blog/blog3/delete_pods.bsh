@@ -1,0 +1,24 @@
+#!/bin/bash
+
+# Script to delete all mysql pods on the node in $1
+
+TARGET=$1
+NUMBER=$(oc adm manage-node $TARGET --list-pods 2>&1 | grep -i mysql | wc -l)
+NAMESPACES=$(oc adm manage-node $TARGET --list-pods 2>&1 | grep -i mysql | awk '{print $1}')
+
+# cordon the node
+echo Cordoning $TARGET
+oc adm cordon $TARGET
+
+echo Deleting mysql pods on $TARGET
+for NAME in $NAMESPACES
+do
+ oc delete pod mysql-ocs-0 -n $NAME --force --grace-period=0
+done
+
+echo Deleted $NUMBER mysql pods
+
+sleep 20
+oc adm uncordon $TARGET
+echo $TARGET uncordoned
+
