@@ -1,0 +1,47 @@
+#!/bin/bash
+
+if [ $# -eq 0 ]; then
+ echo "Usage : $0 <run name>"
+ exit 1
+fi
+
+run_name=$1
+script_name=run_sysbench
+test_length=$2
+threads=$3
+read_only=$4
+write_only=$5
+service_name=mysql-ocs-fs
+output_interval=10
+host_list=/home/sagy/blog4/computelist
+
+mkdir $run_name
+echo "starting stat collection on worker nodes"
+sshpass -predhat pssh -t0 -x "-oStrictHostKeyChecking=no -i ~/.ssh/ocpocs311.sagyocpocsonaws.com" -i -l ec2-user -h $host_list -A "nohup sudo bash gather_stats start $run_name &"
+
+for pod_name in $(oc get pods|grep -v NAME|awk '{print $1}')
+do
+ echo "copying $script_name to pod $pod_name"
+ oc cp $script_name -c sysbench $pod_name:/tmp/
+ echo "background executing $script_name in pod $pod_name"
+ oc exec -c sysbench $pod_name -- nohup bash -c "/tmp/$script_name run $test_length $threads $read_only $write_only \$(hostname) $output_interval >> /tmp/$run_name-$pod_name" &
+done
+
+((test_length=$test_length+20))
+echo "sleeping for $test_length minutes..."
+sleep $test_length
+
+for pod_name in $(oc get pods|grep -v NAME|awk '{print $1}')
+do
+ echo "copying log from pod $pod_name"
+ oc cp -c sysbench $pod_name:/tmp/$run_name-$pod_name ./$run_name/
+done
+
+echo "stopping stat collection on worker nodes"
+sshpass -predhat pssh -t0 -x "-oStrictHostKeyChecking=no -i ~/.ssh/ocpocs311.sagyocpocsonaws.com" -i -l ec2-user -h $host_list -A "nohup sudo bash gather_stats stop $run_name &"
+
+echo "getting stats from worker nodes"
+for node in $(cat $host_list)
+do
+ sshpass -P passphrase -p 'redhat' scp -q -oStrictHostKeyChecking=no -i ~/.ssh/ocpocs311.sagyocpocsonaws.com -r ec2-user@$node:/tmp/$run_name ./$run_name/$run_name-$node
+done

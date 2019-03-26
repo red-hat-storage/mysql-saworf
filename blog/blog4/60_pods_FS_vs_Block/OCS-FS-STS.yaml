@@ -1,0 +1,69 @@
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mysql-ocs-fs
+spec:
+  selector:
+    matchLabels:
+      app: mysql-ocs-fs
+  serviceName: "mysql-ocs-fs"
+  podManagementPolicy: Parallel
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: mysql-ocs-fs
+    spec:
+      terminationGracePeriodSeconds: 10
+      containers:
+      - name: mysql-ocs-fs
+        image: mysql:5.7
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          value: password
+        resources:
+          requests:
+            memory: 2Gi
+          limits:
+            memory: 2Gi
+        ports:
+        - containerPort: 3306
+          name: mysql
+        volumeMounts:
+        - name: mysql-ocs-fs-data
+          mountPath: /var/lib/mysql
+        - name: custom-rh-mysql-config
+          mountPath: /etc/mysql/conf.d
+      - name: sysbench
+        image: vaelinalsorna/sysbench-container:1.8
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          value: password
+        resources:
+          limits:
+            memory: 512Mi
+        command: 
+              - "bash"
+              - "-c"
+              - >
+                while ! /usr/bin/mysql -sN --user=root --password=password -h $(hostname) -e "select 3" >/dev/null 2>&1 ;
+                do
+                 /bin/sleep 0.5;
+                done;
+                /usr/bin/mysql -sN --user=root --password=password -h $(hostname) -e "create database sysbench" ;
+                ./run_sysbench prepare 3 600 off off mysql-ocs-fs-0 10 ;
+                /bin/sleep infinity;
+      volumes:
+      - name: custom-rh-mysql-config
+        configMap:
+          name: mysql-custom-config
+  volumeClaimTemplates:
+  - metadata:
+      name: mysql-ocs-fs-data
+    spec:
+      storageClassName: glusterfs-storage
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 15Gi

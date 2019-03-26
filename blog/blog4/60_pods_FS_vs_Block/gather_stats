@@ -1,0 +1,39 @@
+#!/bin/bash
+
+function start_collecting()
+{
+ nohup vmstat -t -S M 5 > $run_log_dir/vmstat.log &
+ nohup iostat -txm 5 > $run_log_dir/iostat.log &
+ nohup mpstat -P ALL 5 >> $run_log_dir/mpstat.log &
+ nohup top -S -b -H -d 10.0 | sed '/\//d' >> $run_log_dir/top.log &
+ nohup pidstat -h -r -u -d -t -w -C sysbench 5 >> $run_log_dir/sysbench_stat.log &
+ nohup pidstat -h -r -u -d -t -w -C mysqld 5 >> $run_log_dir/mysql_stat.log &
+}
+
+function stop_collecting()
+{
+ killall vmstat
+ killall iostat
+ killall mpstat
+ killall top
+ killall pidstat
+}
+
+run_log_dir=/tmp/$2
+mkdir -p $run_log_dir
+
+if [ $# -eq 0 ]; then
+ echo "Usage : $0 <start|stop>"
+ exit 1
+fi
+
+case "$1" in
+start) echo "starting stat collection..."
+       start_collecting
+	  ;;
+stop)  echo "stopping stat collection..."
+       stop_collecting
+	  ;;
+*) echo "You must use either start or stop"
+   ;;
+esac
