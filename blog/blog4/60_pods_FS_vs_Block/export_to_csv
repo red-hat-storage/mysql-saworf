@@ -1,0 +1,79 @@
+#!/bin/bash
+
+function get_avg_latency()
+{
+ let total_avg_latency=0
+ let total_pods=0
+ for avg_latency in $(grep 'avg:' $run_name/$run_name-mysql-ocs*|awk '{print $3}'|tr -d 'ms')
+ do
+  (( ++total_pods ))
+  total_avg_latency=$(echo "$total_avg_latency + $avg_latency"|bc)
+ done
+ echo "$(echo "scale=2; $total_avg_latency/$total_pods"|bc -l)ms"
+}
+
+function get_tps()
+{
+ let total_avg_transactions=0
+ let total_pods=0
+ for tps in $(grep 'transactions' $run_name/$run_name-mysql-ocs*|awk '{print $4}'|tr -d '(')
+ do
+  (( ++total_pods ))
+  total_avg_transactions=$(echo "$total_avg_transactions + $tps"|bc)
+ done
+ echo "$(echo "scale=2; $total_avg_transactions/$total_pods"|bc -l)"
+}
+
+
+function get_transactions_or_queries()
+{
+ let total_grep=0
+ let total_pods=0
+ for grep_var in $(grep $1 $run_name/$run_name-mysql-ocs*|awk '{print $3}')
+ do
+  (( ++total_pods ))
+  total_grep=$(echo "$total_grep + $grep_var"|bc)
+ done
+ echo "$total_grep"
+}
+
+
+if [ $# -eq 0 ]; then
+ echo "Usage : $0 <output_file>"
+ exit 1
+fi
+
+storage_type=FS
+output_file=$1
+thread_line=""
+run_type_line=""
+latency_line=""
+tps_line=""
+transactions_line=""
+read_line=""
+write_line=""
+other_line=""
+for thread_count in 3t 5t 10t
+do
+ thread_line="$thread_line,$thread_count,$thread_count,$thread_count"
+ for test_type in 70r30w 100r0w 0r100w
+ do
+  run_type_line="$run_type_line,$test_type"
+  run_name=$storage_type-$test_type-$thread_count
+  latency_line="$latency_line,$(get_avg_latency $run_name)"
+  tps_line="$tps_line,$(get_tps $run_name)"
+  transaction_line="$transaction_line,$(get_transactions_or_queries transaction)"
+  read_line="$read_line,$(get_transactions_or_queries 'read:')"
+  write_line="$write_line,$(get_transactions_or_queries 'write:')"
+  other_line="$other_line,$(get_transactions_or_queries 'other:')"
+ done
+done
+
+echo $thread_line|sed 's/,//' > $output_file
+echo $run_type_line|sed 's/,//' >> $output_file
+echo $latency_line|sed 's/,//' >> $output_file
+echo $tps_line|sed 's/,//' >> $output_file
+echo $transaction_line|sed 's/,//' >> $output_file
+echo $read_line|sed 's/,//' >> $output_file
+echo $write_line|sed 's/,//' >> $output_file
+echo $other_line|sed 's/,//' >> $output_file

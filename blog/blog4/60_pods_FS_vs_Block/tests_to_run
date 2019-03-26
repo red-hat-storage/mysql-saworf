@@ -1,0 +1,35 @@
+echo "dry run for 5 minutes"
+bash run_the_test FS-dryrun.1 300 5 off off
+sleep 60
+
+bash run_the_test FS-70r30w-3t 600 3 off off
+echo "waiting for things to settle down..."
+sleep 120
+bash run_the_test FS-100r0w-3t 600 3 on off
+echo "waiting for things to settle down..."
+sleep 120
+bash run_the_test FS-0r100w-3t 600 3 off on
+echo "waiting for things to settle down..."
+sleep 120
+
+
+bash run_the_test FS-70r30w-5t 600 5 off off
+echo "waiting for things to settle down..."
+sleep 120
+bash run_the_test FS-100r0w-5t 600 5 on off
+echo "waiting for things to settle down..."
+sleep 120
+bash run_the_test FS-0r100w-5t 600 5 off on
+echo "waiting for things to settle down..."
+sleep 120
+
+
+
+bash run_the_test FS-70r30w-10t 600 10 off off
+echo "waiting for things to settle down..."
+sleep 120
+bash run_the_test FS-100r0w-10t 600 10 on off
+echo "waiting for things to settle down..."
+sleep 120
+bash run_the_test FS-0r100w-10t 600 10 off on
+echo "end of runs..."

@@ -1,0 +1,34 @@
+#!/bin/bash
+
+function get_tps()
+{
+ let total_transactions=0
+ let total_avg_transactions=0
+ let total_pods=0
+ for x in $(grep 'transactions' $runname/$runname-mysql-ocs*|awk '{print $3","$4}'|tr -d '(')
+ do
+  (( ++total_pods ))
+  transactions=$(echo $x|awk -F, '{print $1}')
+  avg_transactions=$(echo $x|awk -F, '{print $2}')
+  total_transactions=$(echo "$total_transactions + $transactions"|bc)
+  total_avg_transactions=$(echo "$total_avg_transactions + $avg_transactions"|bc)
+ done
+ echo "total transactions from $total_pods pods: $total_transactions"
+ echo "Average of transaction per seconds from $total_pods pods: $(echo "scale=2; $total_avg_transactions/$total_pods"|bc -l)"
+}
+
+function get_latency()
+{
+ let total_avg_latency=0
+ let total_pods=0
+ for avg_latency in $(grep 'avg:' $runname/$runname-mysql-ocs*|awk '{print $3}'|tr -d 'ms')
+ do
+  (( ++total_pods ))
+  total_avg_latency=$(echo "$total_avg_latency + $avg_latency"|bc)
+ done
+ echo "Average latency from $total_pods pods: $(echo "scale=2; $total_avg_latency/$total_pods"|bc -l)ms"
+}
+
+runname=$1
+get_tps
+get_latency
