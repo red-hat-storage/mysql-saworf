@@ -1,0 +1,36 @@
+#!/bin/bash
+
+function sysbench_operation()
+{
+sysbench --db-driver=mysql --mysql-user=root --mysql-password=password --mysql-ignore-errors=all \
+  --mysql-host=$service_name --mysql-db=sysbench --report-interval=$output_interval --oltp-read-only=$read_only --oltp-write-only=$write_only \
+  --oltp-table-size=$rows_in_table --oltp-tables-count=$number_of_tables --num-threads=$threads --max-requests=0 --max-time=$maxtime \
+  --rand-type=uniform --test=/usr/src/sysbench/sysbench/tests/db/oltp.lua $1
+}
+
+if [ $# -eq 0 ]; then
+ echo "Usage : $0 <prepare|cleanup|run>"
+ exit 1
+fi
+
+rows_in_table=1000000
+number_of_tables=50
+threads=$3
+maxtime=$2
+read_only=$4
+write_only=$5
+service_name=$6
+output_interval=$7
+case "$1" in
+prepare) echo "prepping sysbench..."
+	  time sysbench_operation prepare
+	  ;;
+cleanup) echo "cleaning sysbench..."
+	  time sysbench_operation cleanup
+	  ;;
+run) echo "running sysbench..."
+	  time sysbench_operation run
+	  ;;
+*) echo "You must use either prepare or cleanup or run"
+   ;;
+esac
