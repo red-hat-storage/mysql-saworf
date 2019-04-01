@@ -1,0 +1,84 @@
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mysql-ocs-block
+spec:
+  selector:
+    matchLabels:
+      app: mysql-ocs-block
+  serviceName: "mysql-ocs-block"
+  podManagementPolicy: Parallel
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: mysql-ocs-block
+    spec:
+      terminationGracePeriodSeconds: 10
+      containers:
+      - name: mysql-ocs-block
+        image: mysql:5.7
+        env:
+        resources:
+          requests:
+            memory: 2Gi
+          limits:
+            memory: 2Gi
+        ports:
+        - containerPort: 3306
+          name: mysql
+        volumeMounts:
+        - name: mysql-ocs-block-data
+          mountPath: /var/lib/mysql
+        - name: custom-rh-mysql-config
+          mountPath: /etc/mysql/conf.d
+      - name: sysbench
+        image: vaelinalsorna/sysbench-container:1.8
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          value: password
+        - name: MY_NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: MY_POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: MY_POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: MY_POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        resources:
+          limits:
+            memory: 512Mi
+        command: 
+              - "bash"
+              - "-c"
+              - >
+                while ! /usr/bin/mysql -sN --user=root --password=password -h $(hostname) -e "select 3" >/dev/null 2>&1 ;
+                do
+                 /bin/sleep 0.5;
+                done;
+                log_file=/tmp/sysbench-$MY_POD_NAME-$MY_NODE_NAME.log;
+                /usr/bin/mysql -sN --user=root --password=password -h $(hostname) -e "create database sysbench" >> $log_file 2>&1;
+                ./run_sysbench prepare 3 600 off off $(hostname) 10 >> $log_file 2>&1;
+                /bin/sleep infinity;
+      volumes:
+      - name: custom-rh-mysql-config
+        configMap:
+          name: mysql-custom-config
+  volumeClaimTemplates:
+  - metadata:
+      name: mysql-ocs-block-data
+    spec:
+      storageClassName: glusterfs-storage-block
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 15Gi
