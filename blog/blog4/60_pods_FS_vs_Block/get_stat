@@ -1,0 +1,94 @@
+#!/bin/bash
+
+#=====================================================================================
+# This script uses the data collected via "gather_stats" to show very specific 
+# metrics that are of point of interest. You can use these methods to show other stats
+# but for now it is just the context switching stats from vmstat, the CPU idle from
+# mpstat, and the actual EBS GP2 device utilization (we have one per instance) from 
+# iostat.
+#=====================================================================================
+
+storage=FS
+tests="$storage-70r30w-3t $storage-70r30w-5t $storage-70r30w-10t"
+nodes="ip-172-16-26-120.us-west-2.compute.internal ip-172-16-27-161.us-west-2.compute.internal ip-172-16-39-190.us-west-2.compute.internal ip-172-16-44-7.us-west-2.compute.internal ip-172-16-53-212.us-west-2.compute.internal ip-172-16-56-45.us-west-2.compute.internal"
+number_of_nodes=$(echo $nodes|wc -w)
+
+function get_cs()
+{
+ for run_name in $tests
+ do
+  let cs_avg_total=0
+  pushd $run_name
+  for node_name in $nodes
+  do
+   let total=0
+   let y=0
+   while read x
+   do 
+    total=$(echo "$total + $x"|bc)
+    let y++
+   done < <(grep -v 'procs\|swpd' $run_name-$node_name/vmstat.log |awk '{print $12}')
+   avg=$(echo "scale=2;$total/$y"|bc)
+   cs_avg_total=$(echo "$cs_avg_total + $avg"|bc)
+   echo "cs_avg_total=$cs_avg_total"
+  done
+  popd
+  avg_per_node=$(echo "$cs_avg_total / $number_of_nodes"|bc)
+  echo "average cs per node in test $run_name: $avg_per_node"
+ done
+}
+
+function get_idle()
+{
+ for run_name in $tests
+ do
+  let idle_avg_total=0
+  pushd $run_name
+  for node_name in $nodes
+  do
+   let total=0
+   let y=0
+   while read x
+   do
+    total=$(echo "$total + $x"|bc)
+    let y++
+   done < <(grep all $run_name-$node_name/mpstat.log |awk '{print $13}')
+   avg=$(echo "scale=2;$total/$y"|bc)
+   idle_avg_total=$(echo "$idle_avg_total + $avg"|bc)
+   echo "idle_avg_total=$idle_avg_total"
+  done
+  popd
+  avg_per_node=$(echo "$idle_avg_total / $number_of_nodes"|bc)
+  echo "average idle per node in test $run_name: $avg_per_node"
+ done
+}
+
+function get_ebs_device_utilization()
+{
+ for run_name in $tests
+ do
+  let util_avg_total=0
+  pushd $run_name
+  for node_name in $nodes
+  do
+   let total=0
+   let y=0
+   while read x
+   do
+    total=$(echo "$total + $x"|bc)
+    let y++
+    echo "total=$total"
+   done < <(grep nvme3n1 $run_name-$node_name/iostat.log |awk '{print $14}')
+   avg=$(echo "scale=2;$total/$y"|bc)
+   util_avg_total=$(echo "$util_avg_total + $avg"|bc)
+   echo "util_avg_total=$util_avg_total"
+  done
+  popd
+  avg_per_node=$(echo "$util_avg_total / $number_of_nodes"|bc)
+  echo "average idle per node in test $run_name: $avg_per_node"
+ done
+}
+
+#get_cs
+#get_idle
+get_ebs_device_utilization
