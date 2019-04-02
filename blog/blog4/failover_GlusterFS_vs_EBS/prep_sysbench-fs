@@ -1,0 +1,19 @@
+#!/bin/bash
+
+
+run_name=iopause-fs-prep
+test_length=300
+threads=5
+read_only=off
+write_only=off
+service_name=mysql-ocs-fs
+output_interval=10
+
+#for oc_output in $(oc get pods --all-namespaces -o wide|grep -i 'sysbench'|awk '{print $1","$2}')
+for x in {1..10}
+do
+ project_name=io-pause-$x
+ pod_name=$(oc get pods -n io-pause-$x | grep -i 'sysbench'|awk '{print $1}')
+ echo "background executing run_sysbench prep in pod $project_name:$pod_name"
+ oc exec $pod_name -n $project_name -- nohup bash -c "/usr/src/sysbench/run_sysbench prepare $test_length $threads $read_only $write_only $service_name $output_interval >> /tmp/prep-$run_name-$project_name-$threads-$pod_name" &
+done

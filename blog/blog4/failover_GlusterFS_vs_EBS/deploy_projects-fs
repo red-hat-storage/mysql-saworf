@@ -1,0 +1,176 @@
+#!/bin/bash
+
+function create_project()
+{
+ oc create namespace $1
+}
+
+function use_project()
+{
+ oc project $1
+}
+
+function create_service()
+{
+ cat <<EOF | oc create -f -
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql-ocs-fs
+  namespace: $1
+  labels:
+    app: mysql-ocs-fs
+spec:
+  ports:
+  - port: 3306
+    name: mysql-ocs-fs
+  clusterIP: None
+  selector:
+    app: mysql-ocs-fs
+EOF
+}
+
+function create_mysql_sts()
+{
+ cat <<EOF | oc create -f -
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mysql-ocs-fs
+spec:
+  selector:
+    matchLabels:
+      app: mysql-ocs-fs
+  serviceName: "mysql-ocs-fs"
+  podManagementPolicy: Parallel
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: mysql-ocs-fs
+    spec:
+      terminationGracePeriodSeconds: 10
+      containers:
+      - name: mysql-ocs-fs
+        image: mysql:5.7
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          value: password
+        resources:
+          requests:
+            memory: 2Gi
+          limits:
+            memory: 2Gi
+        ports:
+        - containerPort: 3306
+          name: mysql
+        volumeMounts:
+        - name: mysql-ocs-fs-data
+          mountPath: /var/lib/mysql
+        volumes:
+        - name: custom-rh-mysql-config
+          mountPath: /etc/mysql/conf.d
+      volumes:
+      - name: custom-rh-mysql-config
+        configMap:
+          name: mysql-custom-config
+      nodeSelector:
+        application_name: mysql-ocs-fs
+  volumeClaimTemplates:
+  - metadata:
+      name: mysql-ocs-fs-data
+    spec:
+      storageClassName: glusterfs-storage
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 15Gi
+EOF
+}
+
+function create_sysbench_deployment()
+{
+ cat <<EOF | oc create -f -
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sysbench
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sysbench
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: sysbench
+    spec:
+      terminationGracePeriodSeconds: 10
+      containers:
+      - name: sysbench
+        image: vaelinalsorna/sysbench-container:1.8
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          value: password
+        - name: RUN_NAME
+          value: sysbench-pod
+        - name: MY_NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: MY_POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: MY_POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        resources:
+          limits:
+            memory: 2Gi
+        command:
+              - "bash"
+              - "-c"
+              - >
+                /bin/sleep infinity;
+      nodeSelector:
+        application_name: sysbench
+EOF
+}
+
+function create_configmap()
+{
+ cat <<EOF | oc create -f -
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mysql-custom-config
+  labels:
+    app: mysql-ocs-fs
+data:
+  mysql.ocs.cnf: |
+    [mysqld]
+    skip-host-cache
+    skip-name-resolve
+    innodb_buffer_pool_size = 1073741824
+    [mysqldump]
+    quick
+    quote-names
+    max_allowed_packet  = 16M
+EOF
+}
+
+projects=10
+for ((i=1; i<=$projects; i++))
+do 
+ project_name=io-pause-$i
+ create_project $project_name
+ use_project $project_name
+ create_service $project_name
+ create_configmap
+ create_mysql_sts
+ create_sysbench_deployment
+done

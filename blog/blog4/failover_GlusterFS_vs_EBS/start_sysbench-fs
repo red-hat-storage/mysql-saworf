@@ -1,0 +1,44 @@
+#!/bin/bash
+
+
+run_name=iopause-glusterfile-test6
+test_length=300
+threads=5
+read_only=off
+write_only=off
+service_name=mysql-ocs-fs
+output_interval=1
+
+for oc_output in $(oc get pods --all-namespaces -o wide|grep 'sysbench'|awk '{print $1","$2}')
+do
+ project_name=$(echo $oc_output|cut -d, -f1)
+ pod_name=$(echo $oc_output|cut -d, -f2)
+ echo "background executing run_sysbench in pod $project_name:$pod_name"
+ oc exec $pod_name -n $project_name -- nohup bash -c "/usr/src/sysbench/run_sysbench run $test_length $threads $read_only $write_only $service_name $output_interval >> /tmp/$run_name-$project_name-$threads-$pod_name" &
+done
+
+echo "$(date) - pausing for 120 seconds before starting pod failover"
+sleep 120
+
+current_node=$(oc get pod --all-namespaces -o wide|grep -i mysql|awk '{print $8}'| uniq)
+echo "$(date) - cordonning $current_node"
+oc adm cordon $current_node
+echo "$(date) - killing all MySQL pods on $current_node"
+for oc_output in $(oc get pods --all-namespaces -o wide|grep -i 'mysql'|awk '{print $1","$2}')
+do
+ project_name=$(echo $oc_output|cut -d, -f1)
+ pod_name=$(echo $oc_output|cut -d, -f2)
+ echo "killing pod $pod_name on project $project_name"
+ oc delete pod $pod_name -n $project_name --force --grace-period=0
+done
+sleep 200
+
+for oc_output in $(oc get pods --all-namespaces -o wide|grep 'sysbench'|awk '{print $1","$2}')
+do
+ project_name=$(echo $oc_output|cut -d, -f1)
+ pod_name=$(echo $oc_output|cut -d, -f2)
+ echo "copying log from pod $project_name:$pod_name"
+ oc cp -n $project_name $pod_name:/tmp/$run_name-$project_name-$threads-$pod_name ./
+done
+
+oc adm uncordon $current_node
